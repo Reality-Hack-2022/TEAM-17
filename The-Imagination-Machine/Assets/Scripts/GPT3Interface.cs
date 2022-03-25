@@ -67,12 +67,13 @@ public class GPT3Interface : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        string[] sentences = story.Split("\n".ToCharArray());
-        gameObject.GetComponent<TextMeshPro>().text = sentences[Mathf.Max(sentences.Length-2, 1)].Trim() + "";
+        string[] lines = story.Split("\n".ToCharArray());
+        string toShow = lines[Mathf.Max(lines.Length-2, 1)].Trim() + "";
+        gameObject.GetComponent<TextMeshPro>().text = toShow;
         // TextMeshProUGUI newInput = inputObject.GetComponent<TextMeshProUGUI>();
         TMP_InputField newInput = inputObject.GetComponent<TMP_InputField>();
         if (Input.GetKeyUp(KeyCode.Return)) {
-            story += newInput.text + "\n";
+            story += newInput.text;
             newInput.text = "";
             Debug.Log("User\n" + story);
             GenerateMore();
