@@ -8,14 +8,37 @@ using UnityEngine;
 public class CallCLIPGAN : MonoBehaviour
 {
     public UnityEngine.UI.RawImage DisplayImage;
+    private int numImagesPerRequest = 15;
 
-    public void UpdateImage(string clipInput) {
-        DisplayImage.texture = GetImage(clipInput);
-        // DisplayImage.color = Color.magenta;
+    void Start() {
+        // HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("https://imagination-machine.s3.us-east-2.amazonaws.com/first/cyberpunk/progress_15.png"));
+        // HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+        // Debug.Log(response);
     }
-    Texture2D GetImage(string clipInput) {
-        string awsUrl = "localhost";
-        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("http://{0}:5000/getImage?clip_input=\"{1}\"", awsUrl, clipInput));
+
+    public void UpdateImage(string sessionName, string folderName) {
+        // DisplayImage.texture = GetImage(sessionName, folderName);
+        // DisplayImage.color = Color.magenta;
+        Texture2D[] textures = new Texture2D[numImagesPerRequest];
+        int nextTexture = 0;
+        while (nextTexture < numImagesPerRequest) {
+            while (textures[nextTexture] != null) {
+                try
+                {
+                    textures[nextTexture] = GetImage(sessionName, folderName, nextTexture);
+                }
+                catch (System.Exception)
+                {
+                    System.Threading.Thread.Sleep(100);
+                } 
+            }
+            DisplayImage.texture = textures[nextTexture];
+            nextTexture++;
+        }
+    }
+    Texture2D GetImage(string sessionName, string folderName, int fileNumber) {
+        // string fileName = "localhost";
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("https://imagination-machine.s3.us-east-2.amazonaws.com/{0}/{1}/progress_{2}.png", sessionName, folderName, fileNumber));
         HttpWebResponse response = (HttpWebResponse)request.GetResponse();
 
         byte[] imageData = null;
