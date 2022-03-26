@@ -12,7 +12,7 @@ using UnityEngine.Networking;
 
 public class GPT3Interface : MonoBehaviour
 {
-    private int session;
+    public int session;
     public string story;
     private OpenAIAPI api;
     public TextMeshProUGUI ErrorLog;
@@ -22,6 +22,8 @@ public class GPT3Interface : MonoBehaviour
     private int numImagesRequested;
     public TextMeshProUGUI RequestCounter;
     public CallCLIPGAN CallCLIPGAN;
+    private int lengthForNextRequest;
+    private int linesPerRequest;
 
     // Start is called before the first frame update
     void Start() {
@@ -32,8 +34,9 @@ public class GPT3Interface : MonoBehaviour
         learningData = "Write a short love story:\nHer soul was a dandelion, carried to all corners of the earth by the wind, scattering into the clouds beyond. Sometimes, when she’s out here alone, she can feel the pulse of something bigger, as if all things animate were beating in unison, a glory and a connection that sweeps her out of herself, out of her consciousness, so that nothing has a name, not in Latin, not in English, not in any known language. All around her, in the sunlight, snow melts, crystals evaporate into a steam, into nothing. In the firelight, fragile things burst and disappear.\nAnd so we rushed down toward the river together, dancing through the trees like the entire world was but a stage for our madness. For the only people for me are the mad ones, the ones who are mad to live, mad to talk, mad to be saved, desirous of everything at the same time, the ones who never yawn or say a commonplace thing, but burn, burn, burn like fabulous yellow roman candles exploding like spiders across the stars! For we are the ones will not be stopped, and we'll go on and on and on, until we've consumed everything and are left in the ashes.\n###\nWrite a short science fiction story:\nCyberspace. A consensual hallucination experienced daily by billions of legitimate operators, in every nation, by children being taught mathematical concepts... A graphic representation of data abstracted from the banks of every computer in the human system. Unthinkable complexity. Lines of light ranged in the nonspace of the mind, clusters and constellations of data. Like city lights, receding.\nA year here and he still dreamed of cyberspace, hope fading nightly. All the speed he took, all the turns he'd taken and the corners he cut in Night City, and he'd still see the matrix in his dreams, bright lattices of logic unfolding across that colourless void... The Sprawl was a long, strange way home now over the Pacific, and he was no Console Man, no cyberspace cowboy. Just another hustler, trying to make it through. But the dreams came on in the Japanese night like livewire voodoo, and he'd cry for it, cry in his sleep, and wake alone in the dark, curled in his capsule in some coffin hotel, hands clawed into the bedslab, temper foam bunched between his fingers, trying to reach the console that wasn't there.\nHis vision crawled with ghost hieroglyphs, translucent lines of symbols arranging themselves against the neutral backdrop of the bunker wall. He looked at the backs of his hands, saw faint neon molecules crawling beneath the skin, ordered by the unknowable code. He raised his right hand and moved it experimentally. It left a faint, fading trail of strobed afterimages.\n###\n";
         story = "Write a short story:\n";
         // API key must be removed before pushing to GitHub, so it should only be present for building
-        api = new OpenAIAPI("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", Engine.Davinci);
-        
+        api = new OpenAIAPI("", Engine.Davinci);
+        linesPerRequest = 4;
+        lengthForNextRequest = 2 + linesPerRequest;
     }
 
     private async Task GenerateMore()
@@ -75,11 +78,18 @@ public class GPT3Interface : MonoBehaviour
         if (lines.Length == 4 && !done) {
             done = true;
             string firstInputPair = lines[1] + "\n" + lines[2];
-            Summarize(firstInputPair);
+            SummarizeAndRequestImages(firstInputPair);
+        } else if (lines.Length == lengthForNextRequest) {
+            string mostRecentLines = lines[lines.Length - linesPerRequest - 1];
+            for (int lineNum = lines.Length - linesPerRequest; lineNum < lines.Length - 1; lineNum++) {
+                mostRecentLines += "\n" + lines[lineNum];
+            }
+            SummarizeAndRequestImages(mostRecentLines);
+            lengthForNextRequest += linesPerRequest;
         }
     }
 
-    private async void Summarize(string toSummarize) {
+    private async void SummarizeAndRequestImages(string toSummarize) {
         Debug.Log("summarizing: " + toSummarize);
         string summaryPrompt = string.Format(@"Story:
 Cyberspace. A consensual hallucination experienced daily by billions of legitimate operators, in every nation, by children being taught mathematical concepts. A graphic representation of data abstracted from the banks of every computer in the human system. Unthinkable complexity. Lines of light ranged in the nonspace of the mind, clusters and constellations of data. Like city lights, receding.
@@ -150,6 +160,7 @@ Descriptions:
             temperature: 0.5,
             max_tokens: maxTokens
         ))).ToString();
+        Debug.Log("summary: " + summary);
         string[] descriptions = summary.Trim().Split('\n');
         List<string> captions = new List<string>();
         for (int i = 0; i < descriptions.Length; i++) {
@@ -184,10 +195,9 @@ Caption:", promptPrompt);
             ))).ToString().Trim();
 
             bool captionIsGood = true;
-
             foreach(string otherCaption in captions)
             {
-                if (similarCaptions(newCaption, otherCaption)) {
+                if (CaptionsAreSimilar(newCaption, otherCaption)) {
                     captionIsGood = false;
                     break;
                 }
@@ -196,37 +206,27 @@ Caption:", promptPrompt);
                 captions.Add(newCaption);
                 Debug.Log("found good caption: " + newCaption);
                 GenerateImage(newCaption);
-
-                
-
             }
-
         }
-
     }
 
     private void GenerateImage(string caption) {
-        string folderName = "Image" + numImagesRequested.ToString() + "_" + caption.Substring(0, 10);
+        string folderName = "Image" + numImagesRequested.ToString();
         string sessionName = "Session_" + session.ToString();
-        // request generation of images
-
         Debug.Log("requesting images");
-        RequestImageGeneration(caption, folderName, sessionName);
+        StartCoroutine(Upload(caption, folderName, sessionName));
         Debug.Log("images requested");
-        CallCLIPGAN.UpdateImage(sessionName, folderName);
     }
 
     IEnumerator Upload(string caption, string folderName, string sessionName)
     {
-        // WWWForm form = new WWWForm("clip_input", "posh private school");
+        string requestBase = "http://c6a0-18-31-16-181.ngrok.io/getImage";
+        WWWForm requestData = new WWWForm();
+        requestData.AddField("clip_input", caption);
+        requestData.AddField("folder_name", folderName);
+        requestData.AddField("session", sessionName);
 
-        string nospaceCaption = caption.Replace(" ", "%20");
-        // string curlRequest = string.Format("curl -X POST http://c6a0-18-31-16-181.ngrok.io/getImage?clip_input={0}&folder_name={1}&session={2}", nospaceCaption, folderName, sessionName);
-        // string curlRequest = string.Format("curl -X POST http://c6a0-18-31-16-181.ngrok.io/getImage\\?clip_input\\=\"cat\"\\&folder_name\\=\"test\"\\&session\\=\"unitytestagain\"");
-        string curlRequest = "curl -X POST http://c6a0-18-31-16-181.ngrok.io/getImage\\?clipinput\\=\"there%20was%20once%20a%20team%20of%20students%20at%20a%20hackathon%20|%20Bryce3d;%20cinema4d%20toon%20and%20cell%20shader;%20VR%20perspective%20|%208k%20resolution;%20Unreal%20Engine%20VRay;%20ArtStation;%20CGSociety\"\\&foldername\\=\"please\"\\&session\\=\"work\"";
-       // string post_url = String.format(http://c6a0-18-31-16-181.ngrok.io/getImage?clip_input="text"&folder_name="text"&session="text"
-
-        using (UnityWebRequest www = UnityWebRequest.Post(curlRequest, ""))
+        using (UnityWebRequest www = UnityWebRequest.Post(requestBase, requestData))
         {
             yield return www.SendWebRequest();
 
@@ -241,11 +241,7 @@ Caption:", promptPrompt);
         }
     }
 
-    private void RequestImageGeneration(string caption, string folderName, string sessionName) {
-        StartCoroutine(Upload(caption, folderName, sessionName));
-    }
-
-    private bool similarCaptions(string newCaption, string otherCaption) {
+    private bool CaptionsAreSimilar(string newCaption, string otherCaption) {
         string[] newCaptionArray = newCaption.Replace(" | ", " ").Split(' ');
         string[] otherCaptionArray = otherCaption.Replace(" | ", " ").Split(' ');
         List<string> newCaptionList = new List<string>(newCaptionArray);

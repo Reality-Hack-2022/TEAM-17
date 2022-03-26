@@ -8,37 +8,38 @@ using UnityEngine;
 public class CallCLIPGAN : MonoBehaviour
 {
     public UnityEngine.UI.RawImage DisplayImage;
-    private int numImagesPerRequest = 15;
+    public GPT3Interface GPT3Interface;
+    private int numImagesPerRequest = 28;
+    private int sessionNum;
+    private int folderNum;
+    private int fileNum;
 
     void Start() {
-        // HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("https://imagination-machine.s3.us-east-2.amazonaws.com/first/cyberpunk/progress_15.png"));
-        // HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-        // Debug.Log(response);
+        sessionNum = GPT3Interface.session;
+        folderNum = 0;
+        fileNum = 0;
     }
 
-    public void UpdateImage(string sessionName, string folderName) {
-        // DisplayImage.texture = GetImage(sessionName, folderName);
-        // DisplayImage.color = Color.magenta;
-        Texture2D[] textures = new Texture2D[numImagesPerRequest];
-        int nextTexture = 0;
-        while (nextTexture < numImagesPerRequest) {
-            while (textures[nextTexture] != null) {
-                try
-                {
-                    textures[nextTexture] = GetImage(sessionName, folderName, nextTexture);
-                }
-                catch (System.Exception)
-                {
-                    System.Threading.Thread.Sleep(100);
-                } 
+    void Update() {
+        try
+        {
+            Texture2D texture = GetImage(sessionNum, folderNum, fileNum);
+            DisplayImage.texture = texture;
+            Debug.Log("Received image " + folderNum + ", progress " + fileNum);
+            fileNum++;
+            if (fileNum >= numImagesPerRequest) {
+                Debug.Log("Completed image " + folderNum);
+                fileNum = 0;
+                folderNum++;
             }
-            DisplayImage.texture = textures[nextTexture];
-            nextTexture++;
+        }
+        catch (System.Exception)
+        {
+            
         }
     }
-    Texture2D GetImage(string sessionName, string folderName, int fileNumber) {
-        // string fileName = "localhost";
-        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("https://imagination-machine.s3.us-east-2.amazonaws.com/{0}/{1}/progress_{2}.png", sessionName, folderName, fileNumber));
+    Texture2D GetImage(int sessionNum, int folderNumber, int fileNumber) {
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(string.Format("https://imagination-machine.s3.us-east-2.amazonaws.com/Session_{0}/Image{1}/progress_{2}.png", sessionNum, folderNumber, fileNumber));
         HttpWebResponse response = (HttpWebResponse)request.GetResponse();
 
         byte[] imageData = null;
